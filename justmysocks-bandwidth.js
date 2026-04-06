@@ -1,9 +1,71 @@
 async function operator(proxies = [], targetPlatform, context) {
   const $ = $substore
 
-  // 你的订阅参数
-  const serviceId = '你的服务ID' // 需要替换为你的 JustMySocks 服务 ID
-  const userId = '你的用户ID' // 需要替换为你的 JustMySocks 用户 ID
+  // 参数优先级：脚本参数 > URL 参数 > 订阅 URL 参数 > 默认值
+  let serviceId = 'YOUR_SERVICE_ID' // 默认 service ID（请替换或通过参数传递）
+  let userId = 'YOUR_USER_ID' // 默认 user ID（请替换或通过参数传递）
+
+  try {
+    // 1. 尝试从脚本参数获取（Sub-Store 界面配置）
+    if ($arguments?.service) {
+      serviceId = $arguments.service
+      $.info(`✓ 从脚本参数获取 service: ${serviceId}`)
+    }
+    if ($arguments?.id) {
+      userId = $arguments.id
+      $.info(`✓ 从脚本参数获取 id: ${userId}`)
+    }
+
+    // 2. 尝试从 URL 参数获取（通过 $options 传递）
+    if ($options?.service) {
+      serviceId = $options.service
+      $.info(`✓ 从 $options 获取 service: ${serviceId}`)
+    }
+    if ($options?.id) {
+      userId = $options.id
+      $.info(`✓ 从 $options 获取 id: ${userId}`)
+    }
+
+    // 3. 从订阅源 URL 中自动提取（最方便：订阅链接本身包含 service 和 id 时无需任何额外配置）
+    // 例如订阅链接为 https://jmssub.net/members/getsub.php?service=123&id=xxx 时自动识别
+    if (context?.source) {
+      $.info(`✓ context.source 存在，尝试提取 URL 参数`)
+      for (const [key, value] of Object.entries(context.source)) {
+        if (!key.startsWith('_') && value?.url) {
+          $.info(`✓ 找到订阅: ${key}, URL: ${value.url}`)
+          try {
+            const urlObj = new URL(value.url)
+            const urlService = urlObj.searchParams.get('service')
+            const urlId = urlObj.searchParams.get('id')
+            if (urlService) {
+              serviceId = urlService
+              $.info(`✓ 从订阅 URL 提取 service: ${serviceId}`)
+            }
+            if (urlId) {
+              userId = urlId
+              $.info(`✓ 从订阅 URL 提取 id: ${userId}`)
+            }
+            break
+          } catch (parseError) {
+            $.error(`解析订阅 URL 失败: ${parseError.message}`)
+          }
+        }
+      }
+    } else {
+      $.info(`⚠ context.source 不存在`)
+    }
+
+    $.info(`🔍 最终使用的参数 - service: ${serviceId}, id: ${userId}`)
+
+    // 检查参数是否有效
+    if (serviceId === 'YOUR_SERVICE_ID' || userId === 'YOUR_USER_ID') {
+      $.error('❌ 未配置有效的 service 和 id 参数，请通过脚本参数或订阅 URL 传递')
+      return proxies
+    }
+  } catch (paramError) {
+    $.error(`❌ 参数解析失败: ${paramError.message}`)
+    return proxies
+  }
 
   try {
     // 获取流量信息
@@ -55,6 +117,8 @@ async function operator(proxies = [], targetPlatform, context) {
       const resetDateStr = resetDate.toISOString().split('T')[0]
 
       $.info(`✅ 流量信息已更新`)
+      $.info(`   Service ID: ${serviceId}`)
+      $.info(`   User ID: ${userId}`)
       $.info(`   已用: ${usedGB} GB / ${totalGB} GB`)
       $.info(`   重置日期: ${resetDateStr}`)
       $.info(`   subscription-userinfo: ${userInfo}`)
